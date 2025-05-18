@@ -8,20 +8,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const STATUS_FILE_PATH: &str = "/tmp/nhl_game_tracker_status.json";
 pub const STATUS_WATCHING_LIVE: &str = "WATCHING_LIVE";
 pub const STATUS_NO_GAMES_LIVE: &str = "NO_GAMES_LIVE";
-pub const TEN_SECONDS: u64 = 10;
-pub const TEN_MINUTES_IN_SECONDS: u64 = 10 * 60;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TrackerStatus {
     pub last_run_timestamp: u64,
     pub current_status: String,
+    pub game_start_timestamps: Vec<u64>, // Renamed from game_start_times
 }
 
 impl TrackerStatus {
-    pub fn new(last_run_timestamp: u64, current_status: String) -> Self {
+    pub fn new(last_run_timestamp: u64, current_status: String, game_start_timestamps: Vec<u64>) -> Self {
         TrackerStatus {
             last_run_timestamp,
             current_status,
+            game_start_timestamps, // Updated field name
         }
     }
 
@@ -29,6 +29,7 @@ impl TrackerStatus {
         TrackerStatus {
             last_run_timestamp: 0,
             current_status: STATUS_NO_GAMES_LIVE.to_string(),
+            game_start_timestamps: Vec::new(), // Updated field name
         }
     }
 }
@@ -48,11 +49,16 @@ pub fn read_status_file() -> Result<TrackerStatus, Box<dyn Error>> {
 }
 
 pub fn write_status_file(status: &TrackerStatus) -> Result<(), Box<dyn Error>> {
+
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(STATUS_FILE_PATH)?;
+    // Ensure the directory exists, though /tmp/ should always exist
+    if let Some(parent) = Path::new(STATUS_FILE_PATH).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     let json_string = serde_json::to_string_pretty(status)?;
     writeln!(file, "{}", json_string)?;
     Ok(())
