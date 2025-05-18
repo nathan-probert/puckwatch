@@ -25,3 +25,8 @@ interval = 10
 ```
 
 Place the compiled `puckwatch` binary in a location accessible by your Polybar scripts (e.g., `~/.config/polybar/scripts/` or ensure the path in `exec` is correct) and make it executable (`chmod +x /path/to/your/puckwatch/target/release/puckwatch`).
+
+If your /tmp folder is not deleted on reboot/restart, you can add the following line to your i3 config:
+```
+exec_always --no-startup-id sh -c 'rm -f /tmp/nhl_game_tracker_status.json'
+```
