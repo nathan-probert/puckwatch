@@ -9,28 +9,20 @@ const NHL_API_URL: &str = "https://api-web.nhle.com/v1/scoreboard/now";
 
 fn get_relevant_games(favourite_teams: &[&str]) -> Result<Vec<GameInfo>, Box<dyn Error>> {
     let all_games = fetch_games_info(NHL_API_URL)?;
-    let ongoing_games = filter_ongoing_games(&all_games);
-    let favourite_ongoing_games = filter_favourite_teams(&ongoing_games, favourite_teams);
+    let favourite_ongoing_games = filter_favourite_teams(&all_games, favourite_teams);
     Ok(favourite_ongoing_games)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let favourite_teams = ["TOR", "DAL", "MTL"]; // Example favourite teams
 
-    let previous_status = read_status_file().unwrap_or_else(|err| {
-        eprintln!(
-            "Warning: Could not read status file ({}). Assuming default status (will attempt to run).",
-            err
-        );
-        TrackerStatus::default_status()
-    });
+    let previous_status = read_status_file().unwrap_or_else(|_| TrackerStatus::default_status());
 
     let current_timestamp = get_current_timestamp()?;
     let time_elapsed = current_timestamp.saturating_sub(previous_status.last_run_timestamp);
 
     let should_run = match previous_status.current_status.as_str() {
         _ if previous_status.last_run_timestamp == 0 => {
-            println!("First run or status reset, attempting to fetch data.");
             true
         }
         STATUS_WATCHING_LIVE if time_elapsed >= TEN_SECONDS => true,

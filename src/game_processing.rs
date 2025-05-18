@@ -1,59 +1,14 @@
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_json::Value;
 use reqwest;
 use std::error::Error;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GameInfo {
-    pub state: String,
     pub home_team_abbrev: String,
     pub home_team_score: u8,
     pub away_team_abbrev: String,
     pub away_team_score: u8,
-}
-
-impl<'de> Deserialize<'de> for GameInfo {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let v = Value::deserialize(deserializer)?;
-
-        let state = v["gameState"]
-            .as_str()
-            .ok_or_else(|| serde::de::Error::custom("missing game state"))?
-            .to_string();
-
-        let home_team_abbrev = v["homeTeam"]["abbrev"]
-            .as_str()
-            .ok_or_else(|| serde::de::Error::custom("missing home abbreviation"))?
-            .to_string();
-
-        let home_team_score = v["homeTeam"]["score"]
-            .as_u64()
-            .ok_or_else(|| serde::de::Error::custom("missing home score"))? as u8;
-
-        let away_team_abbrev = v["awayTeam"]["abbrev"]
-            .as_str()
-            .ok_or_else(|| serde::de::Error::custom("missing away abbreviation"))?
-            .to_string();
-
-        let away_team_score = v["awayTeam"]["score"]
-            .as_u64()
-            .ok_or_else(|| serde::de::Error::custom("missing away score"))? as u8;
-
-        Ok(GameInfo {
-            state,
-            home_team_abbrev,
-            home_team_score,
-            away_team_abbrev,
-            away_team_score,
-        })
-    }
-}
-
-fn fetch_raw_games_data(url: &str) -> Result<serde_json::Value, Box<dyn Error>> {
-    Ok(reqwest::blocking::get(url)?.json::<serde_json::Value>()?)
 }
 
 fn parse_games_from_data(data: serde_json::Value) -> Result<Vec<GameInfo>, Box<dyn Error>> {
@@ -72,25 +27,31 @@ fn parse_games_from_data(data: serde_json::Value) -> Result<Vec<GameInfo>, Box<d
         .and_then(Value::as_array)
         .ok_or_else(|| format!("No 'games' array found for date: {}", focused_date_str))?;
 
-    games_list
-        .iter()
-        .map(|game_val| serde_json::from_value(game_val.clone()).map_err(|e| e.into()))
-        .collect()
-}
+    let mut games = Vec::new();
+    for game_val in games_list {
+        if let Some(state) = game_val.get("gameState").and_then(Value::as_str) {
+            if state == "OFF" || state == "FUT" {
+                continue; // skip games that are not in progress
+            }
+        }
+        let home_team_abbrev = game_val["homeTeam"]["abbrev"].as_str().unwrap_or("").to_string();
+        let home_team_score = game_val["homeTeam"]["score"].as_u64().unwrap_or(0) as u8;
+        let away_team_abbrev = game_val["awayTeam"]["abbrev"].as_str().unwrap_or("").to_string();
+        let away_team_score = game_val["awayTeam"]["score"].as_u64().unwrap_or(0) as u8;
 
+        games.push(GameInfo {
+            home_team_abbrev,
+            home_team_score,
+            away_team_abbrev,
+            away_team_score,
+        });
+    }
+    Ok(games)
+}
 
 pub fn fetch_games_info(url: &str) -> Result<Vec<GameInfo>, Box<dyn Error>> {
-    let raw_data = fetch_raw_games_data(url)?;
+    let raw_data = reqwest::blocking::get(url)?.json::<serde_json::Value>()?;
     parse_games_from_data(raw_data)
-}
-
-
-pub fn filter_ongoing_games(games: &[GameInfo]) -> Vec<GameInfo> {
-    games
-        .iter()
-        .filter(|game| game.state != "OFF")
-        .cloned()
-        .collect()
 }
 
 
