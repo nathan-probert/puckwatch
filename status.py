@@ -1,0 +1,1 @@
+modifying the status file to store the last run time and current game status
