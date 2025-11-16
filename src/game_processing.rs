@@ -59,12 +59,15 @@ fn parse_all_games_details_from_data(
         .and_then(Value::as_array)
         .ok_or("Response missing 'gamesByDate' field or it's not an array")?;
 
-    let games_list = games_by_date_array
+    let games_list = match games_by_date_array
         .iter()
         .find(|entry| entry.get("date").and_then(Value::as_str) == Some(focused_date_str))
         .and_then(|entry| entry.get("games"))
         .and_then(Value::as_array)
-        .ok_or_else(|| format!("No 'games' array found for date: {}", focused_date_str))?;
+    {
+        Some(games) => games,
+        None => return Ok(Vec::new()),
+    };
 
     let mut games = Vec::new();
     for game_val in games_list {
@@ -97,7 +100,13 @@ fn parse_all_games_details_from_data(
 }
 
 pub fn fetch_all_games_details(url: &str) -> Result<Vec<FullGameDetails>, Box<dyn Error>> {
-    let raw_data = reqwest::blocking::get(url)?.json::<serde_json::Value>()?;
+    let raw_data = match reqwest::blocking::get(url) {
+        Ok(resp) => match resp.json::<serde_json::Value>() {
+            Ok(json) => json,
+            Err(_) => return Ok(Vec::new()),
+        },
+        Err(_) => return Ok(Vec::new()),
+    };
     parse_all_games_details_from_data(raw_data)
 }
 
@@ -139,14 +148,17 @@ pub fn print_game_scores_details(games: &[&FullGameDetails]) {
         return;
     }
     for game in games {
-        println!(
-            "{}: {} - {}: {} (State: {})",
-            game.home_team_abbrev,
-            game.home_team_score,
-            game.away_team_abbrev,
-            game.away_team_score,
-            game.game_state
-        );
+        if game.game_state != "OFF" {
+            println!(
+                "{}: {} - {}: {}",
+                game.home_team_abbrev,
+                game.home_team_score,
+                game.away_team_abbrev,
+                game.away_team_score,
+            );
+        } else {
+            println!(""); // clear output
+        }
     }
 }
 
